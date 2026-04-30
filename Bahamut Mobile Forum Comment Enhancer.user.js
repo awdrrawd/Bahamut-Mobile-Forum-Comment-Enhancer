@@ -3,7 +3,7 @@
 // @name:zh-TW         巴哈姆特 手機網頁版 留言區增強
 // @name:zh-cn         巴哈姆特 手机网页版 留言区增强
 // @namespace          https://github.com/awdrrawd
-// @version            1.0.2
+// @version            1.0.3
 // @description        Adds reply, mention-tag, and edit features to Bahamut's mobile forum, plus a scroll-to-top balloon and copy-link button.
 // @description:zh-TW  添加手機版留言區的回覆、TAG編輯功能，並且添加返回頂端氣球與複製連結按鈕
 // @description:zh-cn  添加手机版留言区的回复、TAG编辑功能，并且添加返回顶端气球与复制链接按钮
@@ -368,32 +368,24 @@
         }
 
         const rect = input.getBoundingClientRect();
-        const viewport = window.visualViewport || {
-            height: window.innerHeight,
-            offsetTop: 0
-        };
-
-        const visibleHeight = viewport.height;
-        const viewportTop = viewport.offsetTop;
-
-        const spaceAbove = rect.top - viewportTop;
-        const spaceBelow = visibleHeight - (rect.bottom - viewportTop);
         const itemCount = grouped.commenters.length + grouped.friends.length;
-        const listHeight = Math.min(280, itemCount * 48 + 32);
+        const listHeight = Math.min(280, itemCount * 48);
+        const spaceAbove = rect.top;
+        const spaceBelow = window.innerHeight - rect.bottom;
 
         mentionListEl.style.cssText = `
-    position: fixed;
-    left: ${Math.max(8, rect.left)}px;
-    width: ${Math.min(rect.width, 300)}px;
-    z-index: 99999;
-    max-height: ${Math.min(280, Math.max(spaceAbove, spaceBelow) - 8)}px;
-    overflow-y: scroll;
-`;
+        position: fixed;
+        left: ${Math.max(8, rect.left)}px;
+        width: ${Math.min(rect.width, 300)}px;
+        z-index: 99999;
+        max-height: 280px;
+        overflow-y: scroll;
+        `;
 
         if (spaceAbove >= listHeight || spaceAbove > spaceBelow) {
-            mentionListEl.style.top = Math.max(8, rect.top - viewportTop - 8 - listHeight) + 'px';
+            mentionListEl.style.top = Math.max(8, rect.top - 8 - listHeight) + 'px';
         } else {
-            mentionListEl.style.top = (rect.bottom - viewportTop + 4) + 'px';
+            mentionListEl.style.top = (rect.bottom + 4) + 'px';
         }
         mentionListEl.addEventListener('mousedown', (ev) => {
             // 只有點到捲軸區域才不preventDefault，其他阻止冒泡
