@@ -1,22 +1,24 @@
 // ==UserScript==
-// @name         Bahamut Mobile Forum Comment Enhancer
-// @name:zh-TW   巴哈姆特 手機網頁版 留言區增強
-// @name:zh-cn   巴哈姆特 手机网页版 留言区增强
-// @name:en      Bahamut Mobile Web Enhancer
-// @namespace    https://gamer.com.tw/
-// @version      1.0.0
-// @description  Adds reply, mention-tag, and edit features to Bahamut's mobile forum, plus a scroll-to-top balloon and copy-link button.
+// @name               Bahamut Mobile Forum Comment Enhancer
+// @name:zh-TW         巴哈姆特 手機網頁版 留言區增強
+// @name:zh-cn         巴哈姆特 手机网页版 留言区增强
+// @name:en            Bahamut Mobile Web Enhancer
+// @namespace          https://gamer.com.tw/
+// @version            1.0
+// @description        Adds reply, mention-tag, and edit features to Bahamut's mobile forum, plus a scroll-to-top balloon and copy-link button.
 // @description:zh-TW  添加手機版留言區的回覆、TAG編輯功能，並且添加返回頂端氣球與複製連結按鈕
 // @description:zh-cn  添加手机版留言区的回覆、TAG编辑功能，并且添加返回顶端气球与复制连结按钮
-// @author       erdref2000
-// @icon         https://www.gamer.com.tw/favicon.ico
-// @homepageURL  https://github.com/你的帳號/你的repo
-// @supportURL   https://github.com/你的帳號/你的repo/issues
-// @match        https://m.gamer.com.tw/forum/Co.php*
-// @match        https://m.gamer.com.tw/forum/C.php*
-// @grant        GM_xmlhttpRequest
-// @connect      forum.gamer.com.tw
-// @license      CC-BY-ND-4.0
+// @author             erdref2000
+// @icon               https://www.gamer.com.tw/favicon.ico
+// @homepageURL        https://github.com/你的帳號/你的repo
+// @supportURL         https://github.com/你的帳號/你的repo/issues
+// @match              https://m.gamer.com.tw/forum/Co.php*
+// @match              https://m.gamer.com.tw/forum/C.php*
+// @grant              GM_xmlhttpRequest
+// @connect            forum.gamer.com.tw
+// @license            CC-BY-ND-4.0
+// @downloadURL        https://github.com/awdrrawd/Bahamut-Mobile-Forum-Comment-Enhancer/raw/refs/heads/main/Bahamut%20Mobile%20Forum%20Comment%20Enhancer.user.js
+// @updateURL          https://github.com/awdrrawd/Bahamut-Mobile-Forum-Comment-Enhancer/raw/refs/heads/main/Bahamut%20Mobile%20Forum%20Comment%20Enhancer.user.js
 // ==/UserScript==
 
 (function () {
