@@ -3,7 +3,7 @@
 // @name:zh-TW         巴哈姆特 手機網頁版 留言區增強
 // @name:zh-cn         巴哈姆特 手机网页版 留言区增强
 // @namespace          https://github.com/awdrrawd
-// @version            1.0.1
+// @version            1.0.2
 // @description        Adds reply, mention-tag, and edit features to Bahamut's mobile forum, plus a scroll-to-top balloon and copy-link button.
 // @description:zh-TW  添加手機版留言區的回覆、TAG編輯功能，並且添加返回頂端氣球與複製連結按鈕
 // @description:zh-cn  添加手机版留言区的回复、TAG编辑功能，并且添加返回顶端气球与复制链接按钮
@@ -318,7 +318,7 @@
             item.appendChild(img);
             item.appendChild(textWrap);
 
-            item.addEventListener('mousedown', (ev) => {
+            item.addEventListener('click', (ev) => {
                 ev.preventDefault();
                 ev.stopPropagation();
                 mentionSelecting = true;
@@ -677,7 +677,7 @@
         const data = parseComment(commentEl);
         if (!data) return;
 
-        const deleted = commentEl.querySelector('span[style*="color:red"]');
+        const deleted = [...commentEl.querySelectorAll('span')].some(s => s.textContent.includes('此留言已由原留言者'));
         if (deleted) return;
 
         const footer    = commentEl.querySelector('.reply-content__footer, .list-footer');
