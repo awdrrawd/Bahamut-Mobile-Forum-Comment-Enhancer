@@ -3,7 +3,7 @@
 // @name:zh-TW         巴哈姆特 手機網頁版 留言區增強
 // @name:zh-cn         巴哈姆特 手机网页版 留言区增强
 // @namespace          https://github.com/awdrrawd
-// @version            1.0
+// @version            1.0.1
 // @description        Adds reply, mention-tag, and edit features to Bahamut's mobile forum, plus a scroll-to-top balloon and copy-link button.
 // @description:zh-TW  添加手機版留言區的回覆、TAG編輯功能，並且添加返回頂端氣球與複製連結按鈕
 // @description:zh-cn  添加手机版留言区的回复、TAG编辑功能，并且添加返回顶端气球与复制链接按钮
@@ -16,8 +16,8 @@
 // @grant              GM_xmlhttpRequest
 // @connect            forum.gamer.com.tw
 // @license            CC-BY-ND-4.0
-// @downloadURL        https://raw.githubusercontent.com/awdrrawd/Bahamut-Mobile-Forum-Comment-Enhancer/main/bahamut-mobile-comment-enhancer.user.js
-// @updateURL          https://raw.githubusercontent.com/awdrrawd/Bahamut-Mobile-Forum-Comment-Enhancer/main/bahamut-mobile-comment-enhancer.user.js
+// @downloadURL        https://update.greasyfork.org/scripts/575997/Bahamut%20Mobile%20Forum%20Comment%20Enhancer.user.js
+// @updateURL          https://update.greasyfork.org/scripts/575997/Bahamut%20Mobile%20Forum%20Comment%20Enhancer.meta.js
 // ==/UserScript==
 
 (function () {
@@ -85,11 +85,19 @@
 
     function addScrollTopBalloon() {
         if (!isMobile) return;
-        const balloon = document.createElement('button');
-        balloon.className = 'uhb-scroll-top';
-        balloon.textContent = '𖤂';
-        balloon.title = '返回最上方';
+        const balloon = document.createElement('div');
+        balloon.className = 'uhb-scroll-top quicktool iconbtn';
         balloon.onclick = () => window.scrollTo({ top: 0, behavior: 'smooth' });
+        balloon.innerHTML = `<svg viewBox="0 0 26.95 22.21" style="pointer-events: none;">
+        <g>
+            <path d="M26.37,7.06L13.55,0,.73,7.06c-.54,.3-.74,.98-.44,1.53l.31,.56c.3,.54,.98,.74,1.53,.44L13.55,3.29l11.43,6.3c.54,.3,1.23,.1,1.53-.44l.31-.56c.3-.54,.1-1.23-.44-1.53Z"></path>
+            <g>
+                <path d="M8.26,13.95v1.79h-3.24v6.47h-1.79v-6.47H0v-1.79H8.26Z"></path>
+                <path d="M15.66,13.95c.93,0,1.7,.76,1.7,1.7v4.87c0,.94-.77,1.7-1.7,1.7h-4.87c-.94,0-1.7-.76-1.7-1.7v-4.87c0-.94,.76-1.7,1.7-1.7h4.87Zm-4.78,6.47h4.68v-4.68h-4.68v4.68Z"></path>
+                <path d="M25.17,13.96c.94,0,1.71,.77,1.71,1.7v2.13c0,.93-.77,1.7-1.71,1.7h-4.77s.03,.03,.03,.08c0,0-.02,0-.03-.01v2.65h-1.78V13.96h6.55Zm-4.77,3.74h4.68v-1.96h-4.68v1.96Z"></path>
+            </g>
+        </g>
+    </svg>`;
         document.body.appendChild(balloon);
         function update() {
             balloon.classList.toggle('uhb-scroll-top--visible', window.scrollY > window.innerHeight);
@@ -97,14 +105,12 @@
         window.addEventListener('scroll', update, { passive: true });
         update();
     }
-
     function getAvatarUrl(id) {
         if (!id) return '';
         const c1 = id[0] || '_';
         const c2 = id[1] || '_';
         return `https://avatar2.bahamut.com.tw/avataruserpic/${c1}/${c2}/${id}/${id}_s.png`;
     }
-
     // ──────────────────────────────────────────────
     // 帳號取得（合併）
     // ──────────────────────────────────────────────
@@ -156,7 +162,7 @@
         const map = new Map();
         document.querySelectorAll('[data-comment]').forEach(el => {
             const pcLink = el.querySelector('a.reply-content__user[href*="home.gamer.com.tw/"]')
-                || el.querySelector('a[href*="home.gamer.com.tw/"]');
+            || el.querySelector('a[href*="home.gamer.com.tw/"]');
             if (pcLink) {
                 const m = pcLink.href.match(/home\.gamer\.com\.tw\/([^/?#"]+)/);
                 if (m) {
@@ -221,7 +227,7 @@
                 try {
                     const data = JSON.parse(resp.responseText);
                     const list = Array.isArray(data) ? data :
-                        data.friendList || data.friend || data.list || data.data || data.result || [];
+                    data.friendList || data.friend || data.list || data.data || data.result || [];
                     (Array.isArray(list) ? list : []).forEach(u => {
                         const id   = u.userid || u.userId || u.user_id || u.account || u.id || '';
                         const name = u.nick || u.nickname || u.name || u.displayName || u.userid || id;
@@ -384,7 +390,7 @@
         fetchFriends((result) => {
             if (mentionInput !== input) return;
             const filterFn = f =>
-                f.id.toLowerCase().includes(query) || f.name.toLowerCase().includes(query);
+            f.id.toLowerCase().includes(query) || f.name.toLowerCase().includes(query);
             const matched = {
                 commenters: result.commenters.filter(filterFn),
                 friends: result.friends.filter(filterFn)
@@ -459,7 +465,7 @@
 
     function getAuthor(commentEl) {
         const a = commentEl.querySelector('a.reply-content__user[href*="home.gamer.com.tw/"]')
-            || commentEl.querySelector('a[href*="home.gamer.com.tw/"]');
+        || commentEl.querySelector('a[href*="home.gamer.com.tw/"]');
         if (a) {
             const m = a.href.match(/home\.gamer\.com\.tw\/([^/?#"]+)/);
             if (m) return m[1];
@@ -671,6 +677,9 @@
         const data = parseComment(commentEl);
         if (!data) return;
 
+        const deleted = commentEl.querySelector('span[style*="color:red"]');
+        if (deleted) return;
+
         const footer    = commentEl.querySelector('.reply-content__footer, .list-footer');
         const buttonbar = commentEl.querySelector('.buttonbar');
         if (!buttonbar) return;
@@ -687,7 +696,7 @@
 
         // 編輯按鈕（自己的留言才顯示）
         const isOwn = data.editable === true ||
-            (getAuthor(commentEl) && currentUser && getAuthor(commentEl) === currentUser);
+              (getAuthor(commentEl) && currentUser && getAuthor(commentEl) === currentUser);
         if (isOwn && !footer?.querySelector('.uhb-edit-wrap')) {
             const wrap = document.createElement('div');
             wrap.className = 'uhb-edit-wrap';
@@ -761,13 +770,18 @@
 
             .uhb-scroll-top {
                 position: fixed; right: 16px; bottom: 80px;
-                width: 42px; height: 42px; border-radius: 50%;
-                border: none; background: rgba(255,255,255,0.92);
+                width: 46px; height: 46px; border-radius: 50%;
+                background: rgba(255,255,255,0.92);
                 box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-                font-size: 22px; cursor: pointer; z-index: 9000;
+                cursor: pointer; z-index: 9000;
                 display: flex; align-items: center; justify-content: center;
+                padding: 10px; box-sizing: border-box;
                 opacity: 0; pointer-events: none; transition: opacity .25s;
             }
+            .uhb-scroll-top svg {
+                width: 100%; height: 100%; fill: #555;
+            }
+
             .uhb-scroll-top--visible { opacity: 1; pointer-events: auto; }
 
             .uhb-mention-list {
