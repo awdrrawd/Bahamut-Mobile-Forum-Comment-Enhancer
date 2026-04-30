@@ -96,8 +96,8 @@
                 <path d="M15.66,13.95c.93,0,1.7,.76,1.7,1.7v4.87c0,.94-.77,1.7-1.7,1.7h-4.87c-.94,0-1.7-.76-1.7-1.7v-4.87c0-.94,.76-1.7,1.7-1.7h4.87Zm-4.78,6.47h4.68v-4.68h-4.68v4.68Z"></path>
                 <path d="M25.17,13.96c.94,0,1.71,.77,1.71,1.7v2.13c0,.93-.77,1.7-1.71,1.7h-4.77s.03,.03,.03,.08c0,0-.02,0-.03-.01v2.65h-1.78V13.96h6.55Zm-4.77,3.74h4.68v-1.96h-4.68v1.96Z"></path>
             </g>
-        </g>
-    </svg>`;
+            </g>
+        </svg>`;
         document.body.appendChild(balloon);
         function update() {
             balloon.classList.toggle('uhb-scroll-top--visible', window.scrollY > window.innerHeight);
@@ -139,23 +139,35 @@
     // ──────────────────────────────────────────────
     let cachedFriends = null;
 
-    // 切換文章時清除快取
     window.addEventListener('popstate', () => { cachedFriends = null; });
 
     function parseTagListFromPage() {
-        const list = [];
-        document.querySelectorAll('.tag-list .tag-user').forEach(a => {
-            const onclick = a.getAttribute('onclick') || '';
-            const m = onclick.match(/tagUser\(\d+,\s*'([^']+)'\s*,\s*'([^']+)'/);
-            if (m) {
-                const id   = m[1];
-                const name = m[2];
-                const img    = a.querySelector('img');
-                const avatar = img?.src || img?.dataset?.src || getAvatarUrl(id);
-                if (!list.some(f => f.id === id)) list.push({ id, name, avatar });
+        const result = { commenters: [], friends: [] };
+        const tagList = document.querySelector('.tag-list');
+        if (!tagList) return result;
+
+        let currentGroup = null;
+        tagList.childNodes.forEach(node => {
+            if (node.nodeName === 'H3') {
+                currentGroup = node.textContent.includes('留言') ? 'commenters' : 'friends';
+                return;
+            }
+            if (node.nodeName === 'UL' && currentGroup) {
+                node.querySelectorAll('.tag-user').forEach(a => {
+                    const m = (a.getAttribute('onclick') || '')
+                    .match(/tagUser\(\d+,\s*'([^']+)'\s*,\s*'([^']+)'/);
+                    if (!m) return;
+                    const id     = m[1];
+                    const name   = m[2];
+                    const img    = a.querySelector('img');
+                    const avatar = img?.src || img?.dataset?.src || getAvatarUrl(id);
+                    if (!result[currentGroup].some(f => f.id === id)) {
+                        result[currentGroup].push({ id, name, avatar });
+                    }
+                });
             }
         });
-        return list;
+        return result;
     }
 
     function parseCommentersFromPage() {
@@ -188,14 +200,69 @@
         return [...map.values()];
     }
 
+    function fetchFriends(cb) {
+        const me = getCurrentAccount();
+
+        // 優先從頁面 tag-list 直接讀取（同步，最快）
+        const fromPage = parseTagListFromPage();
+        const hasPageData = fromPage.commenters.length || fromPage.friends.length;
+
+        if (hasPageData) {
+            const result = {
+                commenters: fromPage.commenters.filter(f => f.id !== me),
+                friends:    fromPage.friends.filter(f => f.id !== me)
+            };
+            cb(result);
+            return;
+        }
+
+        // fallback：tag-list 不存在時，從留言 DOM 撈留言者 + GM fetch 好友
+        if (cachedFriends !== null) {
+            cb(buildMergedList(cachedFriends));
+            return;
+        }
+
+        if (!me) {
+            cachedFriends = [];
+            cb(buildMergedList([]));
+            return;
+        }
+
+        GM_xmlhttpRequest({
+            method: 'GET',
+            url: `https://forum.gamer.com.tw/ajax/tag_list_friend.php?u=${encodeURIComponent(me)}`,
+            headers: { 'X-Requested-With': 'XMLHttpRequest', 'Accept': 'application/json' },
+            onload(resp) {
+                const friends = [];
+                try {
+                    const data = JSON.parse(resp.responseText);
+                    const list = Array.isArray(data) ? data :
+                    data.friendList || data.friend || data.list || data.data || data.result || [];
+                    (Array.isArray(list) ? list : []).forEach(u => {
+                        const id   = u.userid || u.userId || u.user_id || u.account || u.id || '';
+                        const name = u.nick || u.nickname || u.name || u.displayName || u.userid || id;
+                        if (id && !friends.some(f => f.id === id)) {
+                            friends.push({ id, name, avatar: getAvatarUrl(id) });
+                        }
+                    });
+                } catch (e) {
+                    console.warn('[UHB] tag_list_friend parse fail', e);
+                }
+                cachedFriends = friends;
+                cb(buildMergedList(friends));
+            },
+            onerror() {
+                cachedFriends = [];
+                cb(buildMergedList([]));
+            }
+        });
+    }
+
     function buildMergedList(friends) {
         const me = getCurrentAccount();
         const commenterMap = new Map();
-        parseTagListFromPage().forEach(f => {
-            if (f.id !== me) commenterMap.set(f.id, f);
-        });
         parseCommentersFromPage().forEach(f => {
-            if (f.id !== me && !commenterMap.has(f.id)) commenterMap.set(f.id, f);
+            if (f.id !== me) commenterMap.set(f.id, f);
         });
         const friendMap = new Map();
         friends.forEach(f => {
@@ -318,7 +385,6 @@
             item.appendChild(img);
             item.appendChild(textWrap);
 
-            // PC：追蹤移動距離，避免拖拉卷軸時誤觸
             let mouseMoved = false;
             let mouseStartY = 0;
             item.addEventListener('mousedown', (ev) => {
@@ -337,7 +403,6 @@
                 selectMention(f.id, f.name);
             });
 
-            // 手機：追蹤移動距離，避免滑動時誤觸
             let touchStartY = 0;
             let touchMoved = false;
             item.addEventListener('touchstart', (ev) => {
@@ -367,31 +432,48 @@
             grouped.friends.forEach(f => addItem(f));
         }
 
-        const rect = input.getBoundingClientRect();
-        const itemCount = grouped.commenters.length + grouped.friends.length;
-        const listHeight = Math.min(280, itemCount * 48);
-        const spaceAbove = rect.top;
+        // 先渲染到不可見處，量出真實高度後再定位
+        mentionListEl.style.cssText = `
+        position: fixed;
+        left: -9999px;
+        top: -9999px;
+        width: 300px;
+        max-height: 280px;
+        overflow-y: scroll;
+        z-index: 99999;
+        visibility: hidden;
+        `;
+        document.body.appendChild(mentionListEl);
+
+        const rect       = input.getBoundingClientRect();
+        const realHeight = mentionListEl.offsetHeight;
         const spaceBelow = window.innerHeight - rect.bottom;
+        const spaceAbove = rect.top;
+
+        let topVal;
+        if (spaceBelow >= realHeight + 4) {
+            topVal = rect.bottom + 4;
+        } else if (spaceAbove >= realHeight + 4) {
+            topVal = rect.top - 8 - realHeight;
+        } else {
+            topVal = spaceAbove > spaceBelow
+                ? Math.max(8, rect.top - 8 - realHeight)
+            : rect.bottom + 4;
+        }
 
         mentionListEl.style.cssText = `
         position: fixed;
         left: ${Math.max(8, rect.left)}px;
+        top: ${topVal}px;
         width: ${Math.min(rect.width, 300)}px;
-        z-index: 99999;
         max-height: 280px;
         overflow-y: scroll;
+        z-index: 99999;
         `;
 
-        if (spaceAbove >= listHeight || spaceAbove > spaceBelow) {
-            mentionListEl.style.top = Math.max(8, rect.top - 8 - listHeight) + 'px';
-        } else {
-            mentionListEl.style.top = (rect.bottom + 4) + 'px';
-        }
         mentionListEl.addEventListener('mousedown', (ev) => {
-            // 只有點到捲軸區域才不preventDefault，其他阻止冒泡
             ev.stopPropagation();
         });
-        document.body.appendChild(mentionListEl);
     }
 
     function handleAtInput(e) {
