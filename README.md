@@ -26,43 +26,33 @@
 
 ### 步驟一：安裝瀏覽器腳本管理器
 
-你需要先安裝一個 Userscript 管理器，推薦以下擇一安裝：
+依你使用的裝置，擇一安裝：
 
-- **Tampermonkey**（推薦）
-  - [Chrome](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
-  - [Firefox](https://addons.mozilla.org/firefox/addon/tampermonkey/)
-  - [Edge](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
-  - [Safari (iOS/macOS)](https://apps.apple.com/app/tampermonkey/id1482490089)
-- **Violentmonkey**
-  - [Chrome](https://chromewebstore.google.com/detail/violentmonkey/jinjaccalgkegedbjcedninebooldoop)
-  - [Firefox](https://addons.mozilla.org/firefox/addon/violentmonkey/)
+#### 📱 iOS（推薦）
+- **[Userscripts](https://ref.gamer.com.tw/redir.php?url=https%3A%2F%2Fapps.apple.com%2Ftw%2Fapp%2Fuserscripts%2Fid1463298887)** — Safari 擴充功能，免費、輕量，直接在 Safari 上運作
 
-> 📱 手機用戶可使用支援 Userscript 的瀏覽器，例如 **Kiwi Browser**（Android）搭配 Tampermonkey，或 **Safari + Tampermonkey**（iOS）。
+#### 🤖 Android
+- **Kiwi Browser**（[Google Play](https://play.google.com/store/apps/details?id=com.kiwibrowser.browser)）— 支援 Chrome 擴充功能的瀏覽器
+  - 安裝完後再至 Chrome Web Store 安裝 [Tampermonkey](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo)
+
+#### 💻 電腦（有時會分享手機版網址）
+- **Tampermonkey** — [Chrome](https://chromewebstore.google.com/detail/tampermonkey/dhdgffkkebhmkfjojejmpbldmpobfkfo) / [Firefox](https://addons.mozilla.org/firefox/addon/tampermonkey/) / [Edge](https://microsoftedge.microsoft.com/addons/detail/tampermonkey/iikmkjmpaadaobahmlepeloendndfphd)
 
 ---
 
 ### 步驟二：安裝腳本
 
-安裝好管理器之後，點擊下方按鈕即可跳轉至 Greasy Fork 安裝頁面：
+安裝好管理器之後，點擊下方連結跳轉至 Greasy Fork 安裝頁面：
 
 **[🔽 點此安裝腳本](https://greasyfork.org/zh-TW/scripts/575997-bahamut-mobile-forum-comment-enhancer)**
 
-點擊頁面上的「安裝腳本」按鈕，管理器會自動彈出安裝確認視窗，按下確認即完成。
+點擊頁面上的「安裝腳本」按鈕，管理器會自動彈出確認視窗，按下確認即完成。
 
 ---
 
 ### 步驟三：開始使用
 
-安裝完成後，以瀏覽器開啟任何巴哈姆特手機版文章頁面（網址開頭為 `https://m.gamer.com.tw/forum/`），功能即自動啟用，無須額外設定。
-
----
-
-## 🖼️ 適用頁面
-
-```
-https://m.gamer.com.tw/forum/Co.php*
-https://m.gamer.com.tw/forum/C.php*
-```
+安裝完成後，開啟任何巴哈姆特手機版文章頁面，功能即自動啟用，無須額外設定。
 
 ---
 
@@ -86,22 +76,11 @@ https://m.gamer.com.tw/forum/C.php*
 
 ---
 
-## 🔄 更新記錄
-
-| 版本 | 說明 |
-|------|------|
-| 1.0.3 | 修正各類相容性問題、優化 @ mention 體驗 |
-| 1.0.2 | 改善好友清單讀取邏輯 |
-| 1.0.1 | 修正編輯功能 CSRF Token 取得方式 |
-| 1.0.0 | 初始發布 |
-
----
-
 ## 🐛 問題回報 / 建議
 
 如遇到問題或有功能建議，請至 [Issues](../../issues) 頁面回報，並提供：
 
-- 瀏覽器與版本
+- 裝置與瀏覽器版本
 - 腳本管理器名稱與版本
 - 問題描述與重現步驟（可附截圖）
 
