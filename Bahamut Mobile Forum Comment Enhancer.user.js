@@ -318,7 +318,22 @@
             item.appendChild(img);
             item.appendChild(textWrap);
 
+            let touchStartY = 0;
+            let touchMoved = false;
+
+            item.addEventListener('touchstart', (ev) => {
+                touchStartY = ev.touches[0].clientY;
+                touchMoved = false;
+            }, { passive: true });
+
+            item.addEventListener('touchmove', (ev) => {
+                if (Math.abs(ev.touches[0].clientY - touchStartY) > 8) {
+                    touchMoved = true;
+                }
+            }, { passive: true });
+
             item.addEventListener('click', (ev) => {
+                if (touchMoved) return; // 滑動過就忽略
                 ev.preventDefault();
                 ev.stopPropagation();
                 mentionSelecting = true;
@@ -354,7 +369,10 @@
             width: ${Math.min(rect.width, 300)}px;
             z-index: 99999;
         `;
-
+        mentionListEl.addEventListener('mousedown', (ev) => {
+            ev.preventDefault();
+            ev.stopPropagation();
+        });
         if (spaceAbove >= listHeight || spaceAbove > spaceBelow) {
             mentionListEl.style.top = Math.max(8, rect.top - 8 - listHeight) + 'px';
         } else {
@@ -788,6 +806,8 @@
                 background: #fff; border: 1px solid #ddd; border-radius: 10px;
                 box-shadow: 0 4px 20px rgba(0,0,0,.18);
                 overflow: hidden; max-height: 280px; overflow-y: auto;
+                user-select: none;
+                -webkit-user-select: none;
             }
             .uhb-mention-header {
                 padding: 4px 12px; font-size: 11px; font-weight: bold;
