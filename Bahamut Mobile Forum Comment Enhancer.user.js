@@ -282,105 +282,117 @@
         resetMentionState();
     }
 
-    function showMentionList(grouped, input) {
-        closeMentionList();
-        mentionListEl = document.createElement('div');
-        mentionListEl.className = 'uhb-mention-list';
+function showMentionList(grouped, input) {
+    closeMentionList();
+    mentionListEl = document.createElement('div');
+    mentionListEl.className = 'uhb-mention-list';
 
-        let firstAdded = false;
+    let firstAdded = false;
 
-        function addHeader(text) {
-            const h = document.createElement('div');
-            h.className = 'uhb-mention-header';
-            h.textContent = text;
-            mentionListEl.appendChild(h);
-        }
+    function addHeader(text) {
+        const h = document.createElement('div');
+        h.className = 'uhb-mention-header';
+        h.textContent = text;
+        mentionListEl.appendChild(h);
+    }
 
-        function addItem(f) {
-            const item = document.createElement('div');
-            item.className = 'uhb-mention-item' + (!firstAdded ? ' active' : '');
-            item.dataset.id   = f.id;
-            item.dataset.name = f.name;
-            firstAdded = true;
+    function addItem(f) {
+        const item = document.createElement('div');
+        item.className = 'uhb-mention-item' + (!firstAdded ? ' active' : '');
+        item.dataset.id   = f.id;
+        item.dataset.name = f.name;
+        firstAdded = true;
 
-            const img = document.createElement('img');
-            img.className = 'uhb-mention-avatar';
-            img.src = f.avatar || getAvatarUrl(f.id);
-            img.alt = '';
-            img.onerror = () => { img.style.display = 'none'; };
+        const img = document.createElement('img');
+        img.className = 'uhb-mention-avatar';
+        img.src = f.avatar || getAvatarUrl(f.id);
+        img.alt = '';
+        img.onerror = () => { img.style.display = 'none'; };
 
-            const textWrap = document.createElement('span');
-            textWrap.className = 'uhb-mention-text';
-            textWrap.innerHTML =
-                `<span class="uhb-mention-id">@${f.id}</span>` +
-                `<span class="uhb-mention-name">${f.name}</span>`;
+        const textWrap = document.createElement('span');
+        textWrap.className = 'uhb-mention-text';
+        textWrap.innerHTML =
+            `<span class="uhb-mention-id">@${f.id}</span>` +
+            `<span class="uhb-mention-name">${f.name}</span>`;
 
-            item.appendChild(img);
-            item.appendChild(textWrap);
+        item.appendChild(img);
+        item.appendChild(textWrap);
 
-            let touchStartY = 0;
-            let touchMoved = false;
-
-            item.addEventListener('touchstart', (ev) => {
-                touchStartY = ev.touches[0].clientY;
-                touchMoved = false;
-            }, { passive: true });
-
-            item.addEventListener('touchmove', (ev) => {
-                if (Math.abs(ev.touches[0].clientY - touchStartY) > 8) {
-                    touchMoved = true;
-                }
-            }, { passive: true });
-
-            item.addEventListener('click', (ev) => {
-                if (touchMoved) return; // 滑動過就忽略
-                ev.preventDefault();
-                ev.stopPropagation();
-                mentionSelecting = true;
-                selectMention(f.id, f.name);
-            });
-            item.addEventListener('touchstart', (ev) => {
-                ev.stopPropagation();
-                mentionSelecting = true;
-                selectMention(f.id, f.name);
-            }, { passive: true });
-
-            mentionListEl.appendChild(item);
-        }
-
-        if (grouped.commenters.length) {
-            addHeader('留言名單');
-            grouped.commenters.forEach(f => addItem(f));
-        }
-        if (grouped.friends.length) {
-            addHeader('好友名單');
-            grouped.friends.forEach(f => addItem(f));
-        }
-
-        const rect = input.getBoundingClientRect();
-        const itemCount = grouped.commenters.length + grouped.friends.length;
-        const listHeight = Math.min(280, itemCount * 48);
-        const spaceAbove = rect.top;
-        const spaceBelow = window.innerHeight - rect.bottom;
-
-        mentionListEl.style.cssText = `
-            position: fixed;
-            left: ${Math.max(8, rect.left)}px;
-            width: ${Math.min(rect.width, 300)}px;
-            z-index: 99999;
-        `;
-        mentionListEl.addEventListener('mousedown', (ev) => {
-            ev.preventDefault();
+        // PC：追蹤移動距離，避免拖拉卷軸時誤觸
+        let mouseMoved = false;
+        let mouseStartY = 0;
+        item.addEventListener('mousedown', (ev) => {
+            mouseStartY = ev.clientY;
+            mouseMoved = false;
             ev.stopPropagation();
         });
-        if (spaceAbove >= listHeight || spaceAbove > spaceBelow) {
-            mentionListEl.style.top = Math.max(8, rect.top - 8 - listHeight) + 'px';
-        } else {
-            mentionListEl.style.top = (rect.bottom + 4) + 'px';
-        }
+        item.addEventListener('mousemove', (ev) => {
+            if (Math.abs(ev.clientY - mouseStartY) > 4) mouseMoved = true;
+        });
+        item.addEventListener('click', (ev) => {
+            if (mouseMoved) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            mentionSelecting = true;
+            selectMention(f.id, f.name);
+        });
 
-        document.body.appendChild(mentionListEl);
+        // 手機：追蹤移動距離，避免滑動時誤觸
+        let touchStartY = 0;
+        let touchMoved = false;
+        item.addEventListener('touchstart', (ev) => {
+            touchStartY = ev.touches[0].clientY;
+            touchMoved = false;
+        }, { passive: true });
+        item.addEventListener('touchmove', (ev) => {
+            if (Math.abs(ev.touches[0].clientY - touchStartY) > 8) touchMoved = true;
+        }, { passive: true });
+        item.addEventListener('touchend', (ev) => {
+            if (touchMoved) return;
+            ev.preventDefault();
+            ev.stopPropagation();
+            mentionSelecting = true;
+            selectMention(f.id, f.name);
+        });
+
+        mentionListEl.appendChild(item);
     }
+
+    if (grouped.commenters.length) {
+        addHeader('留言名單');
+        grouped.commenters.forEach(f => addItem(f));
+    }
+    if (grouped.friends.length) {
+        addHeader('好友名單');
+        grouped.friends.forEach(f => addItem(f));
+    }
+
+    const rect = input.getBoundingClientRect();
+    const itemCount = grouped.commenters.length + grouped.friends.length;
+    const listHeight = Math.min(280, itemCount * 48);
+    const spaceAbove = rect.top;
+    const spaceBelow = window.innerHeight - rect.bottom;
+
+    mentionListEl.style.cssText = `
+        position: fixed;
+        left: ${Math.max(8, rect.left)}px;
+        width: ${Math.min(rect.width, 300)}px;
+        z-index: 99999;
+        max-height: 280px;
+        overflow-y: scroll;
+    `;
+
+    if (spaceAbove >= listHeight || spaceAbove > spaceBelow) {
+        mentionListEl.style.top = Math.max(8, rect.top - 8 - listHeight) + 'px';
+    } else {
+        mentionListEl.style.top = (rect.bottom + 4) + 'px';
+    }
+mentionListEl.addEventListener('mousedown', (ev) => {
+    // 只有點到捲軸區域才不preventDefault，其他阻止冒泡
+    ev.stopPropagation();
+});
+    document.body.appendChild(mentionListEl);
+}
 
     function handleAtInput(e) {
         const input = e.target;
@@ -404,7 +416,7 @@
         const query  = val.slice(at + 1, pos).toLowerCase();
         mentionInput = input;
         mentionStart = at;
-
+console.log('[UHB] @ detected, query:', query); // 加在這裡
         fetchFriends((result) => {
             if (mentionInput !== input) return;
             const filterFn = f =>
@@ -456,12 +468,12 @@
         if (!isMobile) return;
         document.addEventListener('input', handleAtInput);
         document.addEventListener('keydown', handleAtKeydown);
-        document.addEventListener('click', (e) => {
-            if (!e.target.closest('.uhb-mention-list')) {
-                closeMentionList();
-                resetMentionState();
-            }
-        });
+document.addEventListener('mousedown', (e) => {
+    if (!e.target.closest('.uhb-mention-list')) {
+        closeMentionList();
+        resetMentionState();
+    }
+});
     }
 
     // ──────────────────────────────────────────────
