@@ -91,20 +91,23 @@
 
     Object.assign(btn.style, {
       position:        'fixed',
-      bottom:          '24px',
-      right:           '24px',
+      // 用 env(safe-area-inset-bottom) 避開 iOS Safari 底部導覽列
+      bottom:          'calc(72px + env(safe-area-inset-bottom, 0px))',
+      right:           '20px',
       zIndex:          '2147483647',  // 最高層級
-      width:           '48px',
-      height:          '48px',
+      width:           '54px',        // 手機上加大一點，好點擊
+      height:          '54px',
       borderRadius:    '50%',
       cursor:          'pointer',
       display:         'flex',
       alignItems:      'center',
       justifyContent:  'center',
-      fontSize:        '22px',
-      boxShadow:       '0 2px 12px rgba(0,0,0,0.5)',
+      fontSize:        '24px',
+      boxShadow:       '0 2px 16px rgba(0,0,0,0.6)',
       transition:      'transform 0.2s, opacity 0.2s',
       userSelect:      'none',
+      webkitUserSelect: 'none',
+      touchAction:     'manipulation',  // 避免 iOS 雙擊縮放延遲
       // 按鈕本身要反轉回來，不然黑暗模式下按鈕會被雙重反色
       filter:          'invert(1) hue-rotate(180deg)',
     });
