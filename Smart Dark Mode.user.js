@@ -5,8 +5,7 @@
 // @description  為所有網站加上黑暗模式，智慧保護圖片/影片不被反色，支援每個網站獨立記憶開關狀態
 // @author       You
 // @match        *://*/*
-// @grant        GM_setValue
-// @grant        GM_getValue
+// @grant        none
 // @run-at       document-start
 // ==/UserScript==
 
@@ -58,8 +57,14 @@
   `;
 
   // ── 狀態管理 ───────────────────────────────────────────────
-  // 預設：開啟黑暗模式（找不到記憶則預設 true）
-  let isDark = GM_getValue(STORAGE_KEY, true);
+  // 用 localStorage 取代 GM_getValue（iOS 相容性更好）
+  let isDark;
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    isDark = saved === null ? true : saved === 'true'; // 預設 true
+  } catch (e) {
+    isDark = true; // 存取失敗也預設開啟
+  }
 
   // ── 注入 / 移除樣式 ───────────────────────────────────────
   function applyDark() {
@@ -77,7 +82,7 @@
 
   function setMode(dark) {
     isDark = dark;
-    GM_setValue(STORAGE_KEY, dark);
+    try { localStorage.setItem(STORAGE_KEY, String(dark)); } catch (e) {}
     dark ? applyDark() : removeDark();
     updateBtn();
   }
