@@ -1,140 +1,193 @@
 // ==UserScript==
 // @name         🌙 Smart Dark Mode — 智慧黑暗模式
 // @namespace    https://github.com/smartdarkmode
-// @version      4.0.0
-// @description  mix-blend-mode 實現黑暗模式：不卡頓、fixed 元素正常、圖片原色保留
+// @version      5.0.0
+// @description  只把灰階系的白底/黑字對調，有色元素和圖片完全不動
 // @author       You
 // @match        *://*/*
 // @grant        none
-// @run-at       document-start
+// @run-at       document-end
 // ==/UserScript==
 
 (function () {
   'use strict';
 
-  const STYLE_ID    = '__sdm_style__';
   const BTN_ID      = '__sdm_btn__';
+  const STYLE_ID    = '__sdm_base__';
   const STORAGE_KEY = 'dark_mode_' + location.hostname;
 
-  // ── 核心原理 v4 ──────────────────────────────────────────────
-  //
-  //  問題回顧：
-  //   v1  html { filter }         → fixed 全壞（含我們的按鈕）
-  //   v2  body { filter }         → 按鈕 OK，但網站 fixed header/nav 壞
-  //   v3  backdrop-filter overlay → fixed 全 OK，但 GPU 極重 → 卡頓
-  //
-  //  v4 方案：mix-blend-mode: difference
-  //   • difference(白色, 頁面顏色) = |白-頁面| = 反色  → 實現黑暗模式
-  //   • mix-blend-mode 不建立 containing block        → fixed 完全正常
-  //   • 只是「合成模式」不是逐幀像素處理              → 效能輕量
-  //   • 圖片預先 filter: invert(1)，overlay 再反色    → 數學完全抵銷 → 原色
-  //
-  //  差異（vs backdrop-filter）：
-  //   mix-blend-mode 不支援 hue-rotate，所以有色物件（藍→黃、紅→青）
-  //   對大部分網站（以黑白文字為主）影響不大，圖片顏色完全正確。
-  //
+  // ── 目標色 ──────────────────────────────────────────────────
+  const DARK_BG   = '#1a1a1a';   // 白底 → 換成這個
+  const DARK_BG2  = '#252525';   // 淺灰底 → 換成這個
+  const LIGHT_TXT = '#e0e0e0';   // 黑字 → 換成這個
 
-  const DARK_CSS = `
-    /* 白色疊加層 + difference 混合 = 反色整個畫面 */
-    html::before {
-      content: '';
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: #ffffff;
-      mix-blend-mode: difference;
-      pointer-events: none;
-      z-index: 2147483640;
-    }
+  // ── 判斷函式 ────────────────────────────────────────────────
+  function luma(r, g, b)       { return 0.299*r + 0.587*g + 0.114*b; }
+  function saturation(r, g, b) { return Math.max(r,g,b) - Math.min(r,g,b); }
 
-    /* 圖片預先 invert(1)：
-       difference(白, invert(原色)) = |1-(1-原色)| = 原色  ← 數學精準還原 */
-    img,
-    video,
-    canvas,
-    picture,
-    svg image {
-      filter: invert(1) !important;
-    }
+  function parseRGB(str) {
+    if (!str) return null;
+    const m = str.match(/rgba?\(\s*(\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\s*\)/);
+    if (!m) return null;
+    return { r:+m[1], g:+m[2], b:+m[3], a: m[4]!==undefined ? +m[4] : 1 };
+  }
 
-    /* 防止頁面載入瞬間白色閃爍 */
-    html { background: #000 !important; }
-  `;
-
-  // 按鈕 CSS
-  // v4 起不需要任何 filter：按鈕 z-index 高於 overlay，不受 mix-blend-mode 影響
-  const BTN_CSS = `
-    #${BTN_ID} {
-      position: fixed;           /* fixed 正常！沒有任何祖先 filter */
-      right: 20px;
-      bottom: 80px;
-      width: 46px;
-      height: 46px;
-      border-radius: 50%;
-      cursor: pointer;
-      z-index: 2147483647;       /* 高於 overlay → 不被反色 */
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 22px;
-      box-shadow: 0 2px 14px rgba(0,0,0,0.35);
-      transition: transform 0.15s;
-      user-select: none;
-      -webkit-user-select: none;
-      touch-action: manipulation;
-      border: none;
-    }
-    #${BTN_ID}:active { transform: scale(0.88); }
-
-    /* 頁面暗時：亮色按鈕（高對比） */
-    #${BTN_ID}.dark  { background: #eeeeee; }
-
-    /* 頁面亮時：暗色按鈕（高對比） */
-    #${BTN_ID}.light { background: #222222; }
-  `;
+  // 跳過這些標籤（圖片、影片完全不動）
+  const SKIP = new Set(['IMG','VIDEO','CANVAS','PICTURE','SVG','IFRAME',
+                        'SCRIPT','STYLE','NOSCRIPT','BR','HR']);
 
   // ── 狀態 ────────────────────────────────────────────────────
   let isDark;
   try {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    isDark = saved === null ? true : saved === 'true';
-  } catch {
-    isDark = true;
+    const s = localStorage.getItem(STORAGE_KEY);
+    isDark = s === null ? true : s === 'true';
+  } catch { isDark = true; }
+
+  // 追蹤被我們改過的元素，方便還原
+  const changedEls = new Set();
+
+  // ── 單元素處理 ──────────────────────────────────────────────
+  function processEl(el) {
+    if (!(el instanceof HTMLElement)) return;
+    if (SKIP.has(el.tagName))        return;
+    if (el.id === BTN_ID)            return;
+    if (el._sdmDone)                 return;
+    el._sdmDone = true;
+
+    const cs = getComputedStyle(el);
+
+    // ── 背景色 ──
+    const bg = parseRGB(cs.backgroundColor);
+    if (bg && bg.a > 0.05) {
+      const sat = saturation(bg.r, bg.g, bg.b);
+      const lum = luma(bg.r, bg.g, bg.b);
+
+      if (sat < 20) {                     // 灰階系才動
+        if (lum > 210) {                  // 白/近白 → 深底
+          el.style.setProperty('background-color', DARK_BG, 'important');
+          changedEls.add(el);
+        } else if (lum > 160) {           // 淺灰 → 稍暗
+          el.style.setProperty('background-color', DARK_BG2, 'important');
+          changedEls.add(el);
+        }
+      }
+    }
+
+    // ── 文字色 ──
+    const col = parseRGB(cs.color);
+    if (col) {
+      const sat = saturation(col.r, col.g, col.b);
+      const lum = luma(col.r, col.g, col.b);
+
+      if (sat < 30 && lum < 80) {        // 黑/深灰字 → 亮字
+        el.style.setProperty('color', LIGHT_TXT, 'important');
+        changedEls.add(el);
+      }
+    }
+
+    // ── 邊框色（選用，可關閉） ──
+    const border = parseRGB(cs.borderColor);
+    if (border && border.a > 0.05) {
+      const sat = saturation(border.r, border.g, border.b);
+      const lum = luma(border.r, border.g, border.b);
+      if (sat < 20 && lum > 180) {
+        el.style.setProperty('border-color', '#444', 'important');
+        changedEls.add(el);
+      }
+    }
   }
 
-  // ── 樣式注入 ─────────────────────────────────────────────────
-  function applyDark() {
+  // ── 批量處理（分批避免卡頓） ────────────────────────────────
+  function processAll() {
+    const els = Array.from(document.querySelectorAll('*'));
+    let i = 0;
+    function chunk() {
+      const end = Math.min(i + 500, els.length);
+      for (; i < end; i++) processEl(els[i]);
+      if (i < els.length) setTimeout(chunk, 0);
+    }
+    chunk();
+  }
+
+  // ── 還原（關閉時） ──────────────────────────────────────────
+  function revertAll() {
+    changedEls.forEach(el => {
+      el.style.removeProperty('background-color');
+      el.style.removeProperty('color');
+      el.style.removeProperty('border-color');
+      el._sdmDone = false;   // 允許重新掃描
+    });
+    changedEls.clear();
+  }
+
+  // ── 基礎 CSS（html/body 層，快速防閃白） ────────────────────
+  function applyBaseCSS() {
     if (document.getElementById(STYLE_ID)) return;
     const s = document.createElement('style');
     s.id = STYLE_ID;
-    s.textContent = DARK_CSS;
+    s.textContent = `
+      html, body {
+        background-color: ${DARK_BG} !important;
+        color: ${LIGHT_TXT} !important;
+        color-scheme: dark !important;   /* 讓瀏覽器原生 UI 也用暗色 */
+      }
+      /* 絕對不碰圖片 */
+      img, video, canvas, picture, svg { filter: none !important; }
+    `;
     (document.head || document.documentElement).appendChild(s);
   }
 
-  function removeDark() {
+  function removeBaseCSS() {
     document.getElementById(STYLE_ID)?.remove();
   }
 
+  // ── 開關 ────────────────────────────────────────────────────
   function setMode(dark) {
     isDark = dark;
     try { localStorage.setItem(STORAGE_KEY, String(dark)); } catch {}
-    dark ? applyDark() : removeDark();
+
+    if (dark) {
+      applyBaseCSS();
+      processAll();
+    } else {
+      removeBaseCSS();
+      revertAll();
+    }
     updateBtn();
   }
 
   // ── 按鈕 ────────────────────────────────────────────────────
+  // 不用任何 filter/blend-mode，position:fixed 完全正常
   function createBtn() {
     if (document.getElementById(BTN_ID)) return;
 
-    const bs = document.createElement('style');
-    bs.id = '__sdm_btn_css__';
-    bs.textContent = BTN_CSS;
-    (document.head || document.documentElement).appendChild(bs);
+    const style = document.createElement('style');
+    style.textContent = `
+      #${BTN_ID} {
+        position: fixed;
+        right: 20px;
+        bottom: 80px;
+        width: 44px; height: 44px;
+        border-radius: 50%;
+        z-index: 2147483647;
+        display: flex; align-items: center; justify-content: center;
+        font-size: 20px;
+        box-shadow: 0 2px 12px rgba(0,0,0,0.4);
+        cursor: pointer;
+        touch-action: manipulation;
+        user-select: none; -webkit-user-select: none;
+        transition: transform .15s;
+        border: 1.5px solid rgba(255,255,255,0.15);
+      }
+      #${BTN_ID}:active { transform: scale(0.88); }
+      #${BTN_ID}.on  { background: #2a2a2a; color: #fff; }
+      #${BTN_ID}.off { background: #f0f0f0; color: #111; }
+    `;
+    (document.head || document.documentElement).appendChild(style);
 
     const btn = document.createElement('div');
     btn.id = BTN_ID;
     btn.addEventListener('click', () => setMode(!isDark));
-
-    // 直接放 body，position:fixed 完全正常（沒有任何祖先 filter）
     document.body.appendChild(btn);
     updateBtn();
   }
@@ -142,48 +195,32 @@
   function updateBtn() {
     const btn = document.getElementById(BTN_ID);
     if (!btn) return;
-    if (isDark) {
-      btn.textContent = '☀️';
-      btn.className = 'dark';
-      btn.title = '黑暗模式 ON';
-    } else {
-      btn.textContent = '🌙';
-      btn.className = 'light';
-      btn.title = '黑暗模式 OFF';
-    }
+    btn.textContent = isDark ? '☀️' : '🌙';
+    btn.className   = isDark ? 'on' : 'off';
+    btn.title       = isDark ? '黑暗模式 ON — 點擊關閉' : '黑暗模式 OFF — 點擊開啟';
   }
 
-  // ── MutationObserver：動態 inline background-image ──────────
-  function fixInlineBg(node) {
-    if (!(node instanceof Element)) return;
-    const check = (el) => {
-      if (el.style?.backgroundImage && el.style.backgroundImage !== 'none') {
-        el.style.setProperty('filter', 'invert(1)', 'important');
-      }
-    };
-    check(node);
-    node.querySelectorAll?.('[style*="background-image"]').forEach(check);
-  }
-
+  // ── MutationObserver：動態新增的元素也補掃 ─────────────────
   const observer = new MutationObserver(mutations => {
     if (!isDark) return;
     mutations.forEach(m => {
-      m.addedNodes.forEach(fixInlineBg);
-      if (m.type === 'attributes' && m.attributeName === 'style') {
-        fixInlineBg(m.target);
-      }
+      m.addedNodes.forEach(n => {
+        if (n instanceof HTMLElement) {
+          processEl(n);
+          n.querySelectorAll('*').forEach(processEl);
+        }
+      });
     });
   });
 
   // ── 初始化 ──────────────────────────────────────────────────
-  if (isDark) applyDark(); // 頁面一開始就套，防白色閃爍
-
   function init() {
+    if (isDark) {
+      applyBaseCSS();
+      processAll();
+    }
     createBtn();
-    observer.observe(document.documentElement, {
-      childList: true, subtree: true,
-      attributes: true, attributeFilter: ['style'],
-    });
+    observer.observe(document.body, { childList: true, subtree: true });
   }
 
   if (document.readyState === 'loading') {
