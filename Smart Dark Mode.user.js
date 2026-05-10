@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         🌙 Smart Dark Mode — 三模式黑暗模式
 // @namespace    https://github.com/smartdarkmode
-// @version      7.0.0
-// @description  原色／暗色／亮色，等比對應文字深淺，修正粗體模糊，分網站記憶
+// @version      8.0.0
+// @description  原色/暗色/亮色，背景文字成對處理保留對比度，灰底元素完全不動
 // @author       You
 // @match        *://*/*
 // @grant        none
@@ -18,15 +18,16 @@
 
   const MODES  = ['off', 'dark', 'light'];
   const LABELS = { off:'原色', dark:'暗色', light:'亮色' };
-  const ICONS  = { off:'🌐',  dark:'🌙',   light:'☀️' };
+  const ICONS  = { off:'🌐',  dark:'🌙',  light:'☀️' };
 
-  // ── 背景目標色 ──────────────────────────────────────────────
   const DARK_BG  = '#181818';
-  const LITE_BG  = '#f2f2f2';
+  const LITE_BG  = '#f0f0f0';
 
-  // ── 顏色工具 ────────────────────────────────────────────────
-  function luma(r, g, b) { return 0.299*r + 0.587*g + 0.114*b; }
-  function sat(r, g, b)  { return Math.max(r,g,b) - Math.min(r,g,b); }
+  // ── 顏色工具 ──────────────────────────────────────────────
+  const luma = (r,g,b) => 0.299*r + 0.587*g + 0.114*b;
+  const sat  = (r,g,b) => Math.max(r,g,b) - Math.min(r,g,b);
+  const hex2 = v => v.toString(16).padStart(2,'0');
+  const gray = v => { const n=Math.round(v); return '#'+hex2(n)+hex2(n)+hex2(n); };
 
   function parseRGB(str) {
     if (!str) return null;
@@ -35,60 +36,68 @@
     return { r:+m[1], g:+m[2], b:+m[3], a: m[4]!==undefined ? +m[4] : 1 };
   }
 
-  function toHex(v) { return v.toString(16).padStart(2,'0'); }
-  function rgb2hex(r,g,b) { return '#'+toHex(r)+toHex(g)+toHex(b); }
-
-  // ── 等比文字顏色對應 ─────────────────────────────────────────
-  // 暗色模式：把深灰系文字「等比」映射到亮色
-  //   原始黑(0)   → 極亮(228)
-  //   原始深灰(80) → 中亮(180)
-  //   原始中灰(140)→ 偏亮(140) ← 接近中間，不動
-  //   > 160       → 不動（已經夠亮，在暗背景上 OK）
-  //
-  // 亮色模式反向相同邏輯。
-  function mapDarkText(origLuma) {
-    // origLuma: 0~255，輸入深色文字的亮度
-    if (origLuma > 160) return null;          // 已夠亮，不動
-    // 線性映射 [0→160] → [228→128]：越深的字映射到越亮
-    const mapped = Math.round(228 - (origLuma / 160) * 100);
-    return rgb2hex(mapped, mapped, mapped);
+  // ── 找元素向上最近的非透明背景 ───────────────────────────
+  // 只往上走最多 8 層，快速找出「視覺上坐落在哪種背景」
+  function effectiveBgLuma(el) {
+    let cur = el;
+    for (let i = 0; i < 8; i++) {
+      if (!cur || cur === document.documentElement) break;
+      const bg = parseRGB(getComputedStyle(cur).backgroundColor);
+      if (bg && bg.a > 0.1) return luma(bg.r, bg.g, bg.b);
+      cur = cur.parentElement;
+    }
+    return 255; // fallback：假設白底（大多數亮色網站的預設）
   }
 
-  function mapLightText(origLuma) {
-    // origLuma: 0~255，輸入淺色文字的亮度
-    if (origLuma < 100) return null;          // 已夠暗，不動
-    // 線性映射 [100→255] → [100→20]
-    const mapped = Math.round(100 - ((origLuma - 100) / 155) * 80);
-    return rgb2hex(mapped, mapped, mapped);
+  // ── 判斷「這個背景要被我們改嗎」 ─────────────────────────
+  // 只動幾乎純白(暗色模式)或幾乎純黑(亮色模式)
+  const BG_SAT_MAX   = 10;   // 飽和度極低才算灰階背景
+  const WHITE_LUMA   = 238;  // luma > 238 才算「近白」底
+  const BLACK_LUMA   = 22;   // luma < 22  才算「近黑」底
+
+  function bgWillBeDarkened(l, s) { return s < BG_SAT_MAX && l > WHITE_LUMA; }
+  function bgWillBeLightened(l, s) { return s < BG_SAT_MAX && l < BLACK_LUMA; }
+
+  // ── 文字目標亮度（只在背景同時被改時才呼叫）────────────────
+  // darkMode: 背景變暗 → 文字需要夠亮，但不過亮（最高 185）
+  // 只改真正太深（在新暗底上對比 < 4:1）的文字
+  //   #181818 的 relative luma ≈ 0.008
+  //   contrast 4:1 → text relative luma ≥ 4*(0.008+0.05)-0.05 ≈ 0.182 → luma ≈ 114/255
+  const DARK_BG_LUMA = 24;   // luma of #181818
+  const LITE_BG_LUMA = 240;  // luma of #f0f0f0
+
+  function textTargetForDarkBg(origLuma) {
+    // origLuma 0~113 → too dark for dark bg → map to 170~185
+    if (origLuma > 113) return null;           // already readable, skip
+    // 越深的字映射越亮，但上限 185（不刺眼）
+    const t = Math.round(185 - (origLuma / 113) * 15);
+    return gray(t);
   }
 
-  // ── 飽和度閾值（灰階判斷） ──────────────────────────────────
-  // 文字稍寬鬆（SAT_TXT），有些設計用「帶一點藍調的深灰」做正文
-  const SAT_BG  = 10;    // 背景：極嚴，只動純灰白黑底
-  const SAT_TXT = 18;    // 文字：稍寬，捕捉帶微微色調的深灰字
+  function textTargetForLiteBg(origLuma) {
+    // luma > 142 → too light for light bg → map to 40~60
+    if (origLuma < 142) return null;
+    const t = Math.round(60 - ((origLuma - 142) / 113) * 20);
+    return gray(t);
+  }
 
-  // 背景閾值
-  const WHITE_MIN = 235; // luma > 235 才算「近白」底
-  const BLACK_MAX = 25;  // luma < 25  才算「近黑」底
-
-  // ── 跳過清單 ────────────────────────────────────────────────
+  // ── 跳過標籤 ──────────────────────────────────────────────
   const SKIP = new Set([
     'IMG','VIDEO','CANVAS','PICTURE','IFRAME',
     'SCRIPT','STYLE','NOSCRIPT','BR','HR','LINK'
   ]);
 
-  // ── 狀態 ────────────────────────────────────────────────────
+  // ── 狀態 ──────────────────────────────────────────────────
   let mode;
-  try {
-    const s = localStorage.getItem(STORAGE_KEY);
-    mode = MODES.includes(s) ? s : 'off';
-  } catch { mode = 'off'; }
+  try { const s = localStorage.getItem(STORAGE_KEY); mode = MODES.includes(s) ? s : 'off'; }
+  catch { mode = 'off'; }
 
-  // 記錄每個元素改了什麼，方便精準還原
-  // Map<element, { props: string[] }>
-  const changed = new Map();
+  const changed = new Map(); // el → ['background-color', 'color', ...]
 
-  // ── 單元素處理（Read-then-Write 避免 layout thrashing） ───
+  // ── 核心：單元素決策 ──────────────────────────────────────
+  // ★ 關鍵改動：文字和背景「成對決策」
+  //   文字是否要改，取決於「這個元素視覺上坐落的背景是否也被改了」
+  //   → 灰底元素的文字完全不動，保留設計者的對比關係
   function collectChanges(el) {
     if (!(el instanceof HTMLElement)) return null;
     if (SKIP.has(el.tagName))         return null;
@@ -96,56 +105,88 @@
     if (el._sdmMode === mode)         return null;
 
     const cs  = getComputedStyle(el);
-    const out = [];   // [{ prop, value }]
-
-    // ── 背景色 ──
-    const bg = parseRGB(cs.backgroundColor);
-    if (bg && bg.a > 0.05 && sat(bg.r,bg.g,bg.b) < SAT_BG) {
-      const l = luma(bg.r,bg.g,bg.b);
-      if (mode === 'dark'  && l > WHITE_MIN) out.push({ prop:'background-color', val:DARK_BG });
-      if (mode === 'light' && l < BLACK_MAX) out.push({ prop:'background-color', val:LITE_BG });
-    }
-
-    // ── 文字色 ──
+    const bg  = parseRGB(cs.backgroundColor);
     const col = parseRGB(cs.color);
-    if (col && sat(col.r,col.g,col.b) < SAT_TXT) {
-      const l = luma(col.r,col.g,col.b);
-      let mapped = null;
-      if (mode === 'dark')  mapped = mapDarkText(l);
-      if (mode === 'light') mapped = mapLightText(l);
-      if (mapped) out.push({ prop:'color', val:mapped });
+
+    const bgOwn        = bg && bg.a > 0.1;  // 元素本身有背景色
+    const bgOwnLuma    = bgOwn ? luma(bg.r, bg.g, bg.b) : null;
+    const bgOwnSat     = bgOwn ? sat(bg.r, bg.g, bg.b)  : null;
+
+    const writes = [];
+
+    if (mode === 'dark') {
+
+      // ── 1. 背景：只動「幾乎純白」底 ──
+      const changingBg = bgOwn && bgWillBeDarkened(bgOwnLuma, bgOwnSat);
+      if (changingBg) writes.push({ prop:'background-color', val:DARK_BG });
+
+      // ── 2. 文字：只在「視覺背景被改」時才動 ──
+      //   a) 元素本身有白底被我們改 → 直接用新暗底判斷
+      //   b) 元素本身透明 → 向上查找實際背景亮度，若那個背景是近白 → 也要改
+      //   c) 元素本身是灰底（不被我們改）→ 絕對不動文字
+      if (col && sat(col.r,col.g,col.b) < 18) {
+        const colLumaVal = luma(col.r, col.g, col.b);
+        let bgForText;   // 這個文字「視覺上」坐落的新背景亮度
+
+        if (changingBg) {
+          bgForText = DARK_BG_LUMA;             // 我們把這元素的底改暗了
+        } else if (!bgOwn) {
+          // 透明：向上找實際底色的 luma
+          const parentBgLuma = effectiveBgLuma(el.parentElement);
+          if (bgWillBeDarkened(parentBgLuma, 0)) {
+            bgForText = DARK_BG_LUMA;           // 祖先白底被改了
+          }
+          // 若祖先是灰底或暗底 → bgForText 不設 → 不動文字
+        }
+        // 若 bgOwn 且不是白底（是灰底）→ bgForText 不設 → 不動文字
+
+        if (bgForText !== undefined) {
+          const target = textTargetForDarkBg(colLumaVal);
+          if (target) writes.push({ prop:'color', val:target });
+        }
+      }
+
+    } else if (mode === 'light') {
+
+      const changingBg = bgOwn && bgWillBeLightened(bgOwnLuma, bgOwnSat);
+      if (changingBg) writes.push({ prop:'background-color', val:LITE_BG });
+
+      if (col && sat(col.r,col.g,col.b) < 18) {
+        const colLumaVal = luma(col.r, col.g, col.b);
+        let bgForText;
+
+        if (changingBg) {
+          bgForText = LITE_BG_LUMA;
+        } else if (!bgOwn) {
+          const parentBgLuma = effectiveBgLuma(el.parentElement);
+          if (bgWillBeLightened(parentBgLuma, 0)) bgForText = LITE_BG_LUMA;
+        }
+
+        if (bgForText !== undefined) {
+          const target = textTargetForLiteBg(colLumaVal);
+          if (target) writes.push({ prop:'color', val:target });
+        }
+      }
     }
 
-    return out.length ? { el, out } : null;
+    return writes.length ? { el, writes } : null;
   }
 
-  // ── 分批掃描：先讀再寫 ──────────────────────────────────────
+  // ── 分批掃描 ──────────────────────────────────────────────
   function processAll() {
     const els = Array.from(document.querySelectorAll('*'));
     let i = 0;
-
     function chunk() {
       const end = Math.min(i + 400, els.length);
-      const writes = [];
-
-      // 讀取階段
-      for (; i < end; i++) {
-        const r = collectChanges(els[i]);
-        if (r) writes.push(r);
-      }
-
-      // 寫入階段（批量，減少 reflow）
-      writes.forEach(({ el, out }) => {
+      const batch = [];
+      for (; i < end; i++) { const r = collectChanges(els[i]); if (r) batch.push(r); }
+      batch.forEach(({ el, writes }) => {
         el._sdmMode = mode;
-        out.forEach(({ prop, val }) => {
-          el.style.setProperty(prop, val, 'important');
-        });
-        changed.set(el, out.map(o => o.prop));
+        writes.forEach(({ prop, val }) => el.style.setProperty(prop, val, 'important'));
+        changed.set(el, writes.map(w => w.prop));
       });
-
       if (i < els.length) setTimeout(chunk, 0);
     }
-
     chunk();
   }
 
@@ -157,74 +198,52 @@
     changed.clear();
   }
 
-  // ── 基礎 CSS ────────────────────────────────────────────────
-  // color-scheme 移除：在某些 iOS 版本下會影響字體渲染
-  // -webkit-font-smoothing: antialiased 修正淺色字在深底的模糊問題
+  // ── 基礎 CSS ──────────────────────────────────────────────
   function applyBaseCSS() {
     removeBaseCSS();
     const s = document.createElement('style');
     s.id = STYLE_ID;
     if (mode === 'dark') {
       s.textContent = `
-        html,body {
-          background-color: ${DARK_BG} !important;
-          color: #e2e2e2 !important;
-        }
-        /* 修正 WebKit subpixel 渲染切換導致的粗體模糊 */
-        * {
-          -webkit-font-smoothing: antialiased !important;
-          -moz-osx-font-smoothing: grayscale !important;
-        }
-        /* 絕對不動圖片、影片、iframe */
+        html,body { background-color:${DARK_BG}!important; color:#d8d8d8!important; }
+        * { -webkit-font-smoothing:antialiased!important; -moz-osx-font-smoothing:grayscale!important; }
+        #${BTN_ID} { -webkit-font-smoothing:auto!important; }
         img,video,canvas,picture,svg,iframe { filter:none!important; }
       `;
     } else if (mode === 'light') {
       s.textContent = `
-        html,body {
-          background-color: ${LITE_BG} !important;
-          color: #111 !important;
-        }
+        html,body { background-color:${LITE_BG}!important; color:#181818!important; }
         img,video,canvas,picture,svg,iframe { filter:none!important; }
       `;
     }
     (document.head || document.documentElement).appendChild(s);
   }
-
   function removeBaseCSS() { document.getElementById(STYLE_ID)?.remove(); }
 
-  // ── 切換 ────────────────────────────────────────────────────
+  // ── 切換 ──────────────────────────────────────────────────
   function setMode(m) {
     revertAll();
     mode = m;
     try { localStorage.setItem(STORAGE_KEY, m); } catch {}
-    if (mode === 'off') { removeBaseCSS(); }
-    else { applyBaseCSS(); processAll(); }
+    mode === 'off' ? removeBaseCSS() : (applyBaseCSS(), processAll());
     updateBtn();
   }
-
   function nextMode() { setMode(MODES[(MODES.indexOf(mode)+1) % MODES.length]); }
 
-  // ── 按鈕 ────────────────────────────────────────────────────
+  // ── 按鈕 ──────────────────────────────────────────────────
   function createBtn() {
     if (document.getElementById(BTN_ID)) return;
-
     const style = document.createElement('style');
     style.textContent = `
       #${BTN_ID} {
-        position:fixed; right:16px; bottom:76px;
-        z-index:2147483647;
-        width:48px; height:48px; border-radius:24px;
-        display:flex; flex-direction:column;
-        align-items:center; justify-content:center; gap:1px;
-        cursor:pointer; border:none;
-        font-size:11px; font-weight:bold; font-family:sans-serif;
-        line-height:1.2;
+        position:fixed; right:16px; bottom:76px; z-index:2147483647;
+        width:48px; height:48px; border-radius:24px; border:none;
+        display:flex; flex-direction:column; align-items:center;
+        justify-content:center; gap:1px; cursor:pointer;
+        font-size:11px; font-weight:bold; font-family:sans-serif; line-height:1.2;
         box-shadow:0 2px 12px rgba(0,0,0,0.35);
-        touch-action:manipulation;
-        user-select:none; -webkit-user-select:none;
-        transition:transform .15s;
-        /* 按鈕本身不受 font-smoothing 覆蓋影響，保持清晰 */
-        -webkit-font-smoothing: auto !important;
+        touch-action:manipulation; user-select:none; -webkit-user-select:none;
+        transition:transform .15s; -webkit-font-smoothing:auto!important;
       }
       #${BTN_ID}:active { transform:scale(0.87); }
       #${BTN_ID}.off   { background:#e8e8e8; color:#333; }
@@ -232,7 +251,6 @@
       #${BTN_ID}.light { background:#ffffff; color:#222; }
     `;
     (document.head || document.documentElement).appendChild(style);
-
     const btn = document.createElement('div');
     btn.id = BTN_ID;
     btn.addEventListener('click', nextMode);
@@ -244,32 +262,27 @@
     const btn = document.getElementById(BTN_ID);
     if (!btn) return;
     btn.className = mode;
-    btn.innerHTML =
-      `<span style="font-size:16px;line-height:1">${ICONS[mode]}</span>` +
-      `<span>${LABELS[mode]}</span>`;
+    btn.innerHTML = `<span style="font-size:16px;line-height:1">${ICONS[mode]}</span><span>${LABELS[mode]}</span>`;
   }
 
-  // ── MutationObserver ────────────────────────────────────────
+  // ── MutationObserver ──────────────────────────────────────
   const observer = new MutationObserver(mutations => {
     if (mode === 'off') return;
-    const toProcess = [];
-    mutations.forEach(m => {
-      m.addedNodes.forEach(n => {
-        if (n instanceof HTMLElement) {
-          toProcess.push(n, ...n.querySelectorAll('*'));
-        }
+    const batch = [];
+    mutations.forEach(m => m.addedNodes.forEach(n => {
+      if (!(n instanceof HTMLElement)) return;
+      [n, ...n.querySelectorAll('*')].forEach(el => {
+        const r = collectChanges(el); if (r) batch.push(r);
       });
-    });
-    if (!toProcess.length) return;
-    const writes = toProcess.map(collectChanges).filter(Boolean);
-    writes.forEach(({ el, out }) => {
+    }));
+    batch.forEach(({ el, writes }) => {
       el._sdmMode = mode;
-      out.forEach(({ prop, val }) => el.style.setProperty(prop, val, 'important'));
-      changed.set(el, out.map(o => o.prop));
+      writes.forEach(({ prop, val }) => el.style.setProperty(prop, val, 'important'));
+      changed.set(el, writes.map(w => w.prop));
     });
   });
 
-  // ── 初始化 ──────────────────────────────────────────────────
+  // ── 初始化 ────────────────────────────────────────────────
   function init() {
     if (mode !== 'off') { applyBaseCSS(); processAll(); }
     createBtn();
