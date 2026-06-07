@@ -1,5 +1,5 @@
-# 巴哈姆特 手機網頁版 留言區增強
-**Bahamut Mobile Forum Comment Enhancer**
+<h1 align="center">巴哈姆特 手機網頁版 留言區增強<h1>
+<h3 align="center">Bahamut Mobile Forum Comment Enhancer**<h3>
 <div align="center">
   
 [![License: CC-BY-ND-4.0](https://img.shields.io/badge/License-CC--BY--ND--4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nd/4.0/)
