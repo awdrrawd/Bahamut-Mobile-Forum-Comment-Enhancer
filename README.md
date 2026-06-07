@@ -1,9 +1,12 @@
 # 巴哈姆特 手機網頁版 留言區增強
 **Bahamut Mobile Forum Comment Enhancer**
-
+<div align="center">
+  
 [![License: CC-BY-ND-4.0](https://img.shields.io/badge/License-CC--BY--ND--4.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nd/4.0/)
 [![Greasy Fork](https://img.shields.io/badge/Greasy%20Fork-安裝-red?logo=greasyfork)](https://greasyfork.org/zh-TW/scripts/575997-bahamut-mobile-forum-comment-enhancer)
 [![Version](https://img.shields.io/badge/version-1.0.3-blue)](https://greasyfork.org/zh-TW/scripts/575997-bahamut-mobile-forum-comment-enhancer)
+
+</div>
 
 為巴哈姆特手機網頁版（`m.gamer.com.tw`）留言區補上各種實用功能，讓手機瀏覽體驗更接近電腦版。
 
