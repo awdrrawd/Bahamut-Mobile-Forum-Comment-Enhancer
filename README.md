@@ -31,7 +31,7 @@
 依你使用的裝置，擇一安裝：
 
 #### 📱 iOS（推薦）
-- **[Userscripts](https://ref.gamer.com.tw/redir.php?url=https%3A%2F%2Fapps.apple.com%2Ftw%2Fapp%2Fuserscripts%2Fid1463298887)** — Safari 擴充功能，免費、輕量，直接在 Safari 上運作
+- **[Userscripts](https://apps.apple.com/tw/app/userscripts/id1463298887)** — Safari 擴充功能，免費、輕量，直接在 Safari 上運作
 
 #### 🤖 Android
 - **Kiwi Browser**（[Google Play](https://play.google.com/store/apps/details?id=com.kiwibrowser.browser)）— 支援 Chrome 擴充功能的瀏覽器
